@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title id="page-title">Medicine — PillScope</title>
+<meta name="description" content="Dosage, side effects, and warnings for this medicine." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+
+<header class="site-header">
+  <div class="wrap">
+    <a href="/home/" class="logo">PillScope<span class="dot"></span></a>
+    <nav class="site-nav">
+      <a href="/home/">Home</a>
+      <a href="/about/">About</a>
+    </nav>
+  </div>
+</header>
+
+<main id="med-main">
+  <!-- Filled in by script below, or replaced with a not-found state -->
+</main>
+
+<footer class="site-footer">
+  <div class="wrap">
+    <p>PillScope — for informational purposes only. Not a substitute for medical advice.</p>
+    <div class="foot-links">
+      <a href="/home/">Home</a>
+      <a href="/about/">About</a>
+    </div>
+  </div>
+</footer>
+
+<script src="/pillscope-data.js"></script>
+<script>
+  function getParam(name) {
+    return new URLSearchParams(window.location.search).get(name);
+  }
+
+  // Escapes text before it's interpolated into an innerHTML template.
+  // Needed anywhere the value can come from the URL (?q=, ?id=) or from a
+  // live API response — both are untrusted and must never be inserted as
+  // raw HTML.
+  function escapeHtml(value) {
+    if (value === null || value === undefined) return "";
+    return String(value)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
+  function renderNotFound(main) {
+    main.innerHTML = `
+      <div class="wrap">
+        <div class="not-found">
+          <h1>Medicine not found</h1>
+          <p>We couldn't find that entry. Try searching again from the home page.</p>
+          <a class="btn" href="/home/">Back to search</a>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderLoading(main, name) {
+    main.innerHTML = `
+      <div class="wrap">
+        <div class="not-found">
+          <h1>Looking up "${escapeHtml(name)}"…</h1>
+          <p>Pulling live data from openFDA / DailyMed.</p>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderMedicine(med) {
+    document.getElementById("page-title").textContent = `${med.name} — PillScope`;
+    // CATEGORY_COLORS is a fixed local object of hex strings, so this lookup
+    // is safe to put in a style attribute even when med.category is
+    // attacker/API-controlled: an unrecognized category just falls back to
+    // the default color rather than reflecting untrusted text.
+    const color = (typeof CATEGORY_COLORS !== "undefined" && CATEGORY_COLORS[med.category]) || "#DEDEDE";
+    const main = document.getElementById("med-main");
+
+    // Every other field below can come from a live API response (or, in the
+    // "not found" fallback case, straight from the ?q= URL param), so it
+    // must be escaped before going into innerHTML.
+    const name = escapeHtml(med.name);
+    const generic = escapeHtml(med.generic);
+    const category = escapeHtml(med.category);
+    const form = escapeHtml(med.form);
+    const strength = escapeHtml(med.strength);
+    const description = escapeHtml(med.description);
+    const dosage = escapeHtml(med.dosage);
+    const warnings = escapeHtml(med.warnings);
+    const source = escapeHtml(med.source);
+
+    const brandTags = (med.brand || [])
+      .map((b) => `<span class="brand-tag">${escapeHtml(b)}</span>`)
+      .join("");
+
+    const sideEffects = (med.sideEffects || [])
+      .map((s) => `<li>${escapeHtml(s)}</li>`)
+      .join("");
+
+    const image = med.image ? escapeHtml(med.image) : null;
+    const rxcui = med.rxcui ? escapeHtml(String(med.rxcui)) : null;
+    const ndc = med.ndc ? escapeHtml(String(med.ndc)) : null;
+    const cas = med.cas ? escapeHtml(String(med.cas)) : null;
+    const unii = med.unii ? escapeHtml(String(med.unii)) : null;
+    const atcList = Array.isArray(med.atc) ? med.atc : [];
+
+    const identifierCells = [
+      rxcui ? { label: "RxCUI", value: rxcui } : null,
+      ndc ? { label: "NDC", value: ndc } : null,
+      cas ? { label: "CAS Number", value: cas } : null,
+      unii ? { label: "UNII", value: unii } : null,
+    ].filter(Boolean);
+
+    const identifierHtml = identifierCells.length
+      ? `
+        <div class="med-section">
+          <h2>Identifiers</h2>
+          <div class="spec-table">
+            ${identifierCells
+              .map(
+                (c) => `
+              <div class="spec-cell">
+                <div class="spec-label">${escapeHtml(c.label)}</div>
+                <div class="spec-value" style="font-family:monospace;">${c.value}</div>
+              </div>`
+              )
+              .join("")}
+          </div>
+        </div>`
+      : "";
+
+    const atcHtml = atcList.length
+      ? `
+        <div class="med-section">
+          <h2>ATC classification</h2>
+          <ul class="pill-list">
+            ${atcList
+              .map(
+                (a) =>
+                  `<li><span style="font-family:monospace;">${escapeHtml(a.code)}</span> — ${escapeHtml(a.name)}</li>`
+              )
+              .join("")}
+          </ul>
+        </div>`
+      : "";
+
+    const imageHtml = image
+      ? `<img src="${image}" alt="${name}" style="max-width:220px;border-radius:12px;margin:12px 0;display:block;" loading="lazy" onerror="this.remove()" />`
+      : "";
+
+    main.innerHTML = `
+      <section class="med-header">
+        <div class="wrap">
+          <a class="back-link" href="/home/">&larr; Back to search</a>
+          <div class="med-header-top">
+            <div class="med-title-block">
+              <span class="category-pill" style="background:${color}22; border-color:${color}">${category}</span>
+              <h1>${name}</h1>
+              <div class="generic-name">${generic}</div>
+            </div>
+            <div class="med-brand-tags">${brandTags}</div>
+          </div>
+          ${imageHtml}
+          ${
+            med.source
+              ? `<p class="source-note" style="opacity:.6;font-size:.85em;margin-top:8px;">Live data from ${source} — verify against the official label before relying on it.</p>`
+              : ""
+          }
+        </div>
+      </section>
+
+      <section class="med-body">
+        <div class="wrap">
+          <div class="spec-table">
+            <div class="spec-cell">
+              <div class="spec-label">Form</div>
+              <div class="spec-value">${form}</div>
+            </div>
+            <div class="spec-cell">
+              <div class="spec-label">Strength</div>
+              <div class="spec-value">${strength}</div>
+            </div>
+            <div class="spec-cell">
+              <div class="spec-label">Category</div>
+              <div class="spec-value">${category}</div>
+            </div>
+          </div>
+
+          <div class="med-section">
+            <h2>What it's used for</h2>
+            <p>${description}</p>
+          </div>
+
+          <div class="med-section">
+            <h2>Typical dosage</h2>
+            <p>${dosage}</p>
+          </div>
+
+          <div class="med-section">
+            <h2>Common side effects</h2>
+            <ul class="pill-list">${sideEffects}</ul>
+          </div>
+
+          ${identifierHtml}
+          ${atcHtml}
+
+          <div class="med-section">
+            <div class="warning-box">
+              <div class="warning-label">Warnings</div>
+              <p>${warnings}</p>
+            </div>
+          </div>
+        </div>
+      </section>
+    `;
+  }
+
+  document.addEventListener("DOMContentLoaded", async () => {
+    const id = getParam("id");
+    const liveQuery = getParam("q");
+    const ndc = getParam("ndc");
+    const rxcui = getParam("rxcui");
+    const cas = getParam("cas");
+    const atc = getParam("atc");
+    const barcode = getParam("barcode");
+    const main = document.getElementById("med-main");
+
+    let med = id && typeof MEDICINES !== "undefined" ? MEDICINES.find((m) => m.id === id) : null;
+
+    // If ?id= pointed at something that isn't in the local sample list
+    // (e.g. a live search result card), treat it as a name query instead
+    // of showing "not found".
+    const fallbackQuery = med ? null : liveQuery || (id ? id.replace(/-/g, " ") : null);
+
+    if (!med && typeof PillAPI !== "undefined") {
+      try {
+        if (ndc) {
+          renderLoading(main, ndc);
+          med = await PillAPI.getByNDC(ndc);
+        } else if (barcode) {
+          renderLoading(main, barcode);
+          med = await PillAPI.getByBarcode(barcode);
+        } else if (rxcui) {
+          renderLoading(main, rxcui);
+          med = await PillAPI.getByRxcui(rxcui);
+        } else if (cas) {
+          renderLoading(main, cas);
+          med = await PillAPI.getByCAS(cas);
+        } else if (atc) {
+          renderLoading(main, atc);
+          const list = await PillAPI.getByATC(atc);
+          med = list[0] || null;
+        } else if (fallbackQuery) {
+          renderLoading(main, fallbackQuery);
+          med = await PillAPI.getDetails(fallbackQuery);
+        }
+      } catch (err) {
+        console.warn("Live lookup failed:", err);
+      }
+    }
+
+    if (med) {
+      renderMedicine(med);
+    } else {
+      renderNotFound(main);
+    }
+  });
+</script>
+</body>
+</html>
